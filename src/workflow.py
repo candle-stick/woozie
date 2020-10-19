@@ -1,64 +1,57 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 from functools import partial
+from dpcontracts import types, ensure, require
 from src.action import Action
-
-import yaml
+from src.workflowdefinition import WorkflowDefinition
+from src.config import Config
 
 
 @dataclass
 class Workflow:
-    """ Defines how to construct a Workflow object from YAML
-    """
+    """Defines how to construct a Workflow object from YAML"""
+
     name: Optional[str] = None
-    actions: Optional[List[Action]]= None
-    error_handler: Optional[Action]= None
-        
-    def build(self, workflow_file: str, config_file: str) -> Workflow:
-        # load workflow file
-        with open(workflow_file, 'r') as f:
-            workflow = yaml.safe_load(f)
-        
-        # create workflow object components
-        name = workflow['name']
-        
+    actions: Optional[List[Action]] = None
+    error_handler: Optional[Action] = None
+
+    @staticmethod
+    @types(workflow_data=dict, config_data=dict)
+    @ensure(
+        "Must return a Workflow object",
+        lambda args, result: isinstance(result, Workflow),
+    )
+    def build(workflow_data: dict, config_data: dict) -> "Workflow":
+        workflow = WorkflowDefinition.build(**workflow_data)
+        config = Config.build(**config_data)
+
         # Extract Actions from workflow definition and configuration file
-        create_action = partial(self.get_action, config_file)
-        actions = [create_action((name, definition)) 
-                   for name, definition in workflow['actions'].items() 
-                   if name!='error_handler']
-        
+        create = partial(Workflow.compose_action, config)
+        actions = [
+            create((name, definition))
+            for name, definition in workflow.actions.items()
+            if name != "error_handler"
+        ]
+
         # Extract error-handler Action
-        error_handler = create_action(('error_handler', workflow['actions']['error_handler']))
-        
-        return Workflow(name, actions, error_handler)
+        error_handler = create(("error_handler", workflow.actions.get("error_handler")))
+        return Workflow(workflow.name, actions, error_handler)
 
-    def get_action(self, config_file: str, action: Tuple[str, dict]) -> Action:
-        name, a = action
-        
-        # fill placedholders in configuration file then load into dict
-        with open(config_file, 'r') as f:
-            text = f.read()
-            fill = self.interpolate(text, a['vars'])
-            data = yaml.safe_load(fill)
-        
-        # Build Action objects with action specific settings    
-        try: 
-            dep = a['dependencies']
-            configuration = data['action_types'][a['type']]
-        except KeyError as e:
-            dep = None
-            configuration = None
+    @staticmethod
+    @ensure(
+        "Each user defined action-type must match ones defined in Config.yaml",
+        lambda args, result: result.config is not None,
+    )
+    @ensure(
+        "A valid Action Class is returned",
+        lambda args, result: isinstance(result, Action),
+    )
+    def compose_action(config: Dict[str, dict], action: Tuple[str, dict]) -> Action:
+        name, definition = action
 
-        return Action(name = name, 
-                      action_type = a['type'], 
-                      dependencies = dep,
-                      config = configuration)           
-       
-    def interpolate(self, text: str, replacement: dict) -> str:
-        for placeholder, value in replacement.items():
-            text = text.replace(f'{{{{ {placeholder} }}}}', value)
-        return text
-
+        # Build Action objects with type specific settings from config file
+        action_dep = definition.get("dependencies")
+        action_type = definition.get("type")
+        parameters = definition.get("parameters")
+        action_config = config.fetch(action_type).interpolate(parameters)
+        return Action(name, action_type, action_dep, action_config)
