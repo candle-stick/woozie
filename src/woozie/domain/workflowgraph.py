@@ -17,9 +17,19 @@ from networkx import (
 )
 from networkx.drawing.nx_pydot import to_pydot
 
-from src.action import Action
-from src.exceptions.exception import WorkflowGraphError
-from src.workflow import Workflow
+from woozie.domain.action import Action
+from woozie.domain.workflow import Workflow
+
+
+class WorkflowGraphError(Exception):
+    """Exception raised for errors during workflow graph construction.
+
+    Attributes:
+        message -- explanation of the error
+    """
+
+    def __init__(self, message):
+        self.message = message
 
 
 @dataclass
@@ -53,7 +63,8 @@ class WorkflowGraphBuilder:
         workflow_dag = self.build_workflow_dag(input_graph)
 
         # Visualize Workflow DAG
-        self.draw(workflow_dag, "assets/oozie-workflow-dag.png")
+        if generate_graphviz:
+            self.draw(workflow_dag, "assets/oozie-workflow-dag.png")
 
         return workflow_dag
 
@@ -223,8 +234,8 @@ class WorkflowGraphBuilder:
             if children and len(children[current]) == 1:
                 s = children[current][0]
                 stack.pop()
-                # keep nodes with one path in and out
-                if G.in_degree(current) == 1 and G.out_degree(current) == 1:
+                # keep children nodes with one path in and out
+                if G.in_degree(s) == 1 and G.out_degree(s) == 1:
                     stack.append(s)
             else:
                 stack.pop()

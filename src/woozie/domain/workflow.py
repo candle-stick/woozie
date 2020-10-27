@@ -2,9 +2,9 @@ from dataclasses import dataclass
 from typing import List, Tuple, Optional, Dict
 from functools import partial
 from dpcontracts import types, ensure, require
-from src.action import Action
-from src.workflowdefinition import WorkflowDefinition
-from src.config import Config
+from woozie.domain.action import Action
+from woozie.domain.workflowdefinition import WorkflowDefinition
+from woozie.domain.config import Config
 
 
 @dataclass

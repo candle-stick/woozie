@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Optional, Dict
-from src.io import File
+from woozie.domain.io import File
 from dpcontracts import require, types
 
 

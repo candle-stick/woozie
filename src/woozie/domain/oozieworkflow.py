@@ -1,6 +1,7 @@
 import logging
 from dataclasses import dataclass
 from functools import partial
+from pathlib import Path
 
 # Type hinting
 from typing import IO, Dict, Iterator, List, Set
@@ -8,28 +9,21 @@ from typing import IO, Dict, Iterator, List, Set
 from lxml.etree import Element, ElementTree, SubElement
 from networkx import DiGraph
 
-from .action import Action
-from .exceptions.exception import WorkflowGraphError
-from .workflow import Workflow
-from .workflowgraph import WorkflowGraphBuilder
+from woozie.domain.action import Action
+from woozie.domain.workflow import Workflow
+from woozie.domain.workflowgraph import WorkflowGraphBuilder
 
 
 @dataclass
 class OozieWorkflow:
-    """Generates Oozie workflows from worflow."""
+    workflow_graph: DiGraph
+    workflow_name: str
 
-    workflow: Workflow
-
-    def generate(self):
-
-        try:
-            workflow_graph = WorkflowGraphBuilder(self.workflow).build_workflow_graph()
-        except WorkflowGraphError as e:
-            logging.exception(f"Unable to generate workflow\n{e}")
+    def generate(self, output_directory):
 
         try:
-            tree = self.build_xml_tree(workflow_graph)
-            self.write_xml(tree)
+            tree = self.build_xml_tree(self.workflow_graph)
+            self.write_xml(tree, output_directory)
         except Exception as e:
             logging.exception(f"Failed to build XML\n{e}")
 
@@ -40,7 +34,7 @@ class OozieWorkflow:
         error_node = top_order[-2]
 
         root = Element(
-            "workflow-app", name=self.workflow.name, xmlns="uri:oozie:workflow:1.0"
+            "workflow-app", name=self.workflow_name, xmlns="uri:oozie:workflow:1.0"
         )
         sub_element = partial(SubElement, root)
 
@@ -120,9 +114,9 @@ class OozieWorkflow:
 
         return root
 
-    def write_xml(self, tree: ElementTree):
+    def write_xml(self, tree: ElementTree, directory):
         tree.write(
-            "assets/output.xml",
+            str(Path(directory, "workflow.xml")),
             pretty_print=True,
             xml_declaration=True,
             encoding="utf-8",

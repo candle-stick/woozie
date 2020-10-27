@@ -13,6 +13,7 @@ lxml = "*"
 pyyaml = "*"
 dpcontracts = "*"
 dataclasses = "*"
+click = "*"
 
 [requires]
 python_version = "3.6"
